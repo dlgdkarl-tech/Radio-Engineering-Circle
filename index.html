@@ -1188,12 +1188,12 @@ function EmaCard({ a, i, live }) {
         h("div", { "aria-hidden": "true", className: "relative my-4 h-px w-16", style: { background: won ? "rgba(26,22,18,.5)" : "rgba(239,230,209,.5)" } }),
         won ? [
           h("div", { key: "l", className: "relative text-[14px] font-semibold uppercase tracking-[0.18em] font-body" }, "Awarded to"),
-          names.map((n) => h("div", { key: n, className: "relative mt-1 text-[17px] leading-tight", style: { ...MINCHO, fontWeight: 700 } }, n)),
+          a.ranked ? a.ranked.map((r) => h("div", { key: r.n, className: "relative mt-2 leading-tight", style: { ...MINCHO, fontWeight: 700 } }, h("div", { className: "text-[17px]" }, h("span", { className: "mr-1.5 text-[13px] opacity-70" }, "#" + r.rank), r.n.includes(", ") ? nat(r.n) : r.n), h("div", { className: "text-[13px] font-semibold tracking-[0.08em] font-body opacity-80" }, r.pts + " pts"))) : names.map((n) => h("div", { key: n, className: "relative mt-1 text-[17px] leading-tight", style: { ...MINCHO, fontWeight: 700 } }, n)),
           a.pts ? h("span", { key: "p", className: "relative mt-3 rounded-full px-3 py-0.5 text-[14px] font-semibold uppercase tracking-[0.1em] font-body", style: { border: "1.5px solid " + INK } }, a.pts + " pts") : null
         ] : h("div", { className: "relative text-[14px] font-semibold uppercase tracking-[0.18em] font-body" }, "Still open"),
         h("p", { className: "relative mt-3 max-w-[16rem] text-[14px] leading-snug font-body" }, a.note),
         won && h("div", { "aria-hidden": "true", className: "absolute bottom-4 right-5 flex h-[46px] w-[46px] items-center justify-center rounded-[4px] text-[19px] leading-[1.05]", style: { ...BRUSH, writingMode: "vertical-rl", background: VERM, color: "#f6ead2", boxShadow: "inset 0 0 0 2px " + VERM + ", inset 0 0 0 3.5px rgba(246,234,210,.75)", mixBlendMode: "multiply", opacity: live ? 0.93 : 0, transform: live ? "rotate(-7deg) scale(1)" : "rotate(-7deg) scale(1.8)", transition: reduceMotion ? "none" : "transform .3s cubic-bezier(.2,1.5,.4,1) " + (d + 0.7) + "s, opacity .15s linear " + (d + 0.7) + "s" } }, "受賞"),
-        h("span", { className: "sr-only" }, a.t + (won ? ": " + names.join(", ") : ": not awarded yet")))));
+        h("span", { className: "sr-only" }, a.t + (won ? ": " + (a.ranked ? a.ranked.map((r) => "#" + r.rank + " " + (r.n.includes(", ") ? nat(r.n) : r.n) + " " + r.pts + " points").join(", ") : names.join(", ")) : ": not awarded yet")))));
 }
 function Awards({ onShare }) {
   const h = React.createElement, [on, ref] = useInView(), live = on || reduceMotion;
@@ -1395,9 +1395,21 @@ async function renderAwardsCard() {
     x.font = "104px " + BRSH; if (won) { x.fillStyle = JP.INK; x.fillText(kj, px + 30, py + 158); } else { x.strokeStyle = "rgba(239,230,209,.55)"; x.lineWidth = 2; x.strokeText(kj, px + 30, py + 158); }
     x.fillStyle = ink; x.font = "700 24px " + MINC; wrapLines(x, a.t.toUpperCase(), 190, 2).forEach((l, k) => x.fillText(l, px + 150, py + 106 + k * 32));
     if (won) hanko(x, px + AW - 62, py + 112, 34, "\u53D7\u8CDE", 22);
+    if (a.ranked && a.ranked.length) {
+      const n = a.ranked.length, lh = n > 3 ? 23 : 27, y0 = py + 186;
+      x.fillStyle = ink;
+      a.ranked.forEach((r, k) => {
+        const txt = "#" + r.rank + "  " + (r.n.includes(", ") ? nat(r.n) : r.n) + "  \u00B7  " + r.pts + " pts";
+        let fs = 23; x.font = "700 " + fs + "px " + MINC; while (fs > 14 && x.measureText(txt).width > 396) { fs--; x.font = "700 " + fs + "px " + MINC; }
+        x.fillText(txt, px + 32, y0 + k * lh);
+      });
+      const ny = y0 + (n - 1) * lh + 26;
+      if (ny < py + AH - 12) { x.font = "500 19px " + sans; x.fillText(a.note, px + 32, ny); }
+    } else {
     x.font = "700 32px " + MINC; x.fillStyle = ink; const wl = wrapLines(x, who || "Still open", 396, 2); wl.forEach((l, k) => x.fillText(l, px + 32, py + 204 + k * 36));
     x.font = "500 19px " + sans; const ny = py + 204 + (wl.length - 1) * 36 + 30, note = (a.pts ? a.pts + " pts. " : "") + a.note;
     wrapLines(x, note, 396, wl.length > 1 ? 1 : 2).forEach((l, k) => x.fillText(l, px + 32, ny + k * 24));
+    }
   });
   x.fillStyle = "rgba(10,18,32,.9)"; x.fillRect(0, 1268, W, 82);
   x.fillStyle = JP.VERM; x.fillRect(0, 1262, W, 6);
@@ -1747,11 +1759,18 @@ window.SITE_CONFIG = {
       var mx = bandMembers[b].reduce(function (a, m) { return Math.max(a, m.tot); }, 0);
       bandMembers[b].filter(function (m) { return m.tot === mx; }).forEach(function (m) { contributors.push(m.n); });
     });
+    function neoTop3() {
+      var neos = list.filter(function (m) { return m.neo && m.tot > 0; }).sort(function (a, b) { return b.tot - a.tot || a.n.localeCompare(b.n); });
+      var cut = neos.length > 2 ? neos[2].tot : (neos.length ? neos[neos.length - 1].tot : 0);
+      var top = neos.filter(function (m) { return m.tot >= cut; });
+      var ranked = top.map(function (m) { return { n: m.n, pts: m.tot, rank: 1 + neos.filter(function (o) { return o.tot > m.tot; }).length }; });
+      return { t: "Distinguished Neophytes", who: top.map(function (m) { return m.n; }), ranked: ranked, note: top.length ? "Top 3 neophytes by points" : "No neophyte has scored yet", pts: null };
+    }
     var awards = [
       best("att", null, "Active Participation", "Top attending points", "Attending points not awarded yet"),
       best("vol", null, "Service Excellence", "Top volunteering points", "Volunteering points not awarded yet"),
       { t: "Outstanding Band", who: topBands.map(titleBand), note: topBands.length ? "Top contributors: " + contributors.join("; ") : "No band has scored yet", pts: null },
-      best("tot", function (m) { return m.neo; }, "Distinguished Neophytes", "Top neophyte points", "No neophyte has scored yet"),
+      neoTop3(),
       best("con", null, "Reliable Ka-Circle", "Top consistency points", "Consistency points not awarded yet"),
       best("misc", null, "Technical Achievement", "Top miscellaneous points", "Miscellaneous points not awarded yet")
     ];
