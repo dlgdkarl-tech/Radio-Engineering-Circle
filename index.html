@@ -1357,13 +1357,22 @@ async function renderTop5Card() {
   x.font = "600 30px " + sans; x.fillStyle = JP.INK; x.fillText("PERFORMING KA-CIRCLES  \u00B7  2026\u20132027", 70, 318);
   x.fillStyle = JP.VERM; x.fillRect(70, 338, 120, 6);
   const max = (LB.top5[0] ? LB.top5[0].pts : 1);
+  const estH = (n, k, f) => Math.max(f ? 230 : Math.round(120 * k), Math.round(n * (f ? (n >= 3 ? 50 : 68) : (n >= 3 ? 34 : 48)) * k) + (f ? 50 : 44));
+  const topT = LB.top5.find((t) => t.rank === 1), firstH = topT ? estH(topT.names.length, 1, true) : 230, others = LB.top5.filter((t) => t.rank !== 1);
+  let nextY = 370 + firstH + 14;
+  const kScale = Math.max(0.6, Math.min(1, (1172 - nextY) / Math.max(1, others.reduce((a, t) => a + estH(t.names.length, 1, false) + 14, 0))));
   LB.top5.forEach((t, i) => {
-    const first = t.rank === 1, y = first ? 370 : 614 + (i - 1) * 134, hh = first ? 230 : 120, name = t.names.map(nat).join(" & ");
+    const first = t.rank === 1, names = t.names.map(nat), cnt = names.length, hh = first ? firstH : estH(cnt, kScale, false), y = first ? 370 : nextY;
+    if (!first) nextY += hh + 14;
     rr(x, 70, y, 940, hh, 10); x.fillStyle = first ? "rgba(200,52,31,.12)" : "rgba(255,250,236,.55)"; x.fill(); x.strokeStyle = "rgba(26,22,18,.22)"; x.lineWidth = 2; x.stroke();
     const sr = first ? 70 : 42; hanko(x, 70 + 40 + sr, y + hh / 2, sr, ["一", "二", "三", "四", "五"][t.rank - 1], first ? 88 : 52);
-    const nx = 70 + 40 + sr * 2 + 36, nw = 940 - (nx - 70) - 200;
-    x.fillStyle = JP.INK; fitFont(x, name, (f) => "700 " + f + "px " + MINC, first ? 56 : 40, nw, 24); x.fillText(name, nx, y + hh / 2 + (first ? -6 : 8));
-    const bw = Math.max(40, (nw - 10) * (t.pts / max)), by = y + hh / 2 + (first ? 30 : 30);
+    const nx = 70 + 40 + sr * 2 + 36;
+    x.font = "700 " + (first ? 120 : 70) + "px " + MINC; const sw = x.measureText(String(t.pts)).width, nw = (940 - sw) - 34 - nx;
+    const longest = names.reduce((p, q) => (x.measureText(q).width > x.measureText(p).width ? q : p), names[0]);
+    x.fillStyle = JP.INK; const nfs = fitFont(x, longest, (f) => "700 " + f + "px " + MINC, first ? (cnt >= 3 ? 44 : 56) : Math.round((cnt >= 3 ? 28 : 40) * kScale), nw, first ? 30 : Math.max(16, Math.round(22 * kScale)));
+    const nlh = Math.round(nfs * 1.2), top = y + (hh - (cnt * nlh + 20)) / 2;
+    names.forEach((l, k) => { while (x.measureText(l).width > nw && l.length > 1) l = l.slice(0, -1); x.fillText(l, nx, top + nfs * 0.9 + k * nlh); });
+    const bw = Math.max(40, (nw - 10) * (t.pts / max)), by = top + cnt * nlh + 4;
     x.beginPath(); x.moveTo(nx, by + 5); x.lineTo(nx + bw * 0.55, by + 1); x.lineTo(nx + bw, by); x.lineTo(nx + bw, by + 12); x.lineTo(nx + bw * 0.6, by + 11); x.lineTo(nx, by + 8); x.closePath(); x.fillStyle = JP.INK; x.fill();
     x.textAlign = "right"; x.fillStyle = JP.INK; x.font = "700 " + (first ? 120 : 70) + "px " + MINC; x.fillText(String(t.pts), 1010 - 70, y + hh / 2 + (first ? 30 : 20));
     x.font = "500 " + (first ? 34 : 26) + "px " + MINC; x.fillText("\u70B9", 1010 - 24, y + hh / 2 + (first ? 30 : 20)); x.textAlign = "left";
