@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Circle Moderator</title>
+<style>
+  :root { color-scheme: dark; --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --txt:#eef0f4; --mut:#9aa3b2; --acc:#c8341f; --ok:#3aa76d; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5; }
+  header h1 { font-size:17px; margin:0; }
+  main { max-width:980px; margin:0 auto; padding:16px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+  button, select, input, textarea { font:inherit; color:inherit; }
+  button { min-height:40px; padding:0 14px; border-radius:10px; border:1px solid var(--line); background:var(--card); cursor:pointer; }
+  button:hover { border-color:#3b4252; }
+  button.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.pri { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.bad { border-color:#7a2a22; color:#ff9d90; }
+  button.sm { min-height:32px; padding:0 10px; font-size:13px; }
+  button:disabled { opacity:.5; cursor:default; }
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=time], select, textarea {
+    width:100%; min-height:40px; padding:8px 10px; border-radius:10px; border:1px solid var(--line); background:#0c0e12; }
+  textarea { min-height:70px; resize:vertical; }
+  label { display:block; font-size:13px; color:var(--mut); margin:10px 0 4px; }
+  label.chk { display:flex; align-items:center; gap:8px; color:var(--txt); font-size:14px; margin:8px 0; }
+  label.chk input { width:18px; height:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .grow { flex:1; min-width:140px; }
+  .mut { color:var(--mut); font-size:13px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#232834; font-size:12px; color:var(--mut); }
+  .pill.neo { background:#2d2a14; color:#e8c872; }
+  .pill.live { background:#3a1b17; color:#ff9d90; }
+  .pill.ok { background:#16301f; color:#7be0a5; }
+  .list .item { display:flex; align-items:center; gap:10px; padding:9px 4px; border-top:1px solid var(--line); }
+  .list .item:first-child { border-top:0; }
+  .list .item .name { flex:1; cursor:pointer; min-width:0; }
+  .list .item .name b { font-weight:600; }
+  .list input[type=checkbox] { width:20px; height:20px; flex:none; }
+  .pts { font-variant-numeric:tabular-nums; font-weight:700; min-width:44px; text-align:right; }
+  .bulk { position:sticky; top:58px; z-index:4; background:#2a1512; border:1px solid #7a2a22; border-radius:12px; padding:10px; margin-bottom:12px; }
+  dialog { width:min(640px,94vw); max-height:92vh; overflow:auto; border:1px solid var(--line); border-radius:16px; background:var(--card); color:var(--txt); padding:18px; }
+  dialog::backdrop { background:rgba(0,0,0,.65); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:6px 14px; }
+  @media (max-width:520px) { .grid2 { grid-template-columns:1fr; } }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-top:1px solid var(--line); }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  #toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#222733; border:1px solid var(--line); padding:10px 16px; border-radius:12px; z-index:50; display:none; max-width:90vw; }
+  #toast.err { border-color:#7a2a22; color:#ff9d90; }
+  .login { max-width:380px; margin:12vh auto 0; }
+  h2 { font-size:16px; margin:0 0 6px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script>
+/* ===== PASTE YOUR SUPABASE DETAILS HERE (same two values as in index.html) ===== */
+const CONFIG = {
+  SUPABASE_URL: "https://irpvfksnyerswlgvnboc.supabase.co",
+  SUPABASE_KEY: "sb_publishable_beenQyIlgN1Pp187-dvGVg_jb1x1UYG"
+};
+/* ================================================================================ */
+
+const RULES = {
+  att:  [["Net check-in", 5], ["Net logger", 10], ["Net control", 15], ["Seminars", 25], ["Events", 10]],
+  vol:  [["Events", 20], ["Radio duty", 20], ["Radio duty + net control", 40], ["Radio duty + logger", 35], ["Competition", 40], ["Winning or placing (bonus)", 55]],
+  con:  [["Monthly log-ins (5+)", 35], ["Consistency attending (5+)", 55], ["Consistency volunteering (5+)", 70]],
+  misc: [["Regular promotion", 15], ["Licensing", 10], ["Callsign", 25]]
+};
+const CATNAME = { att: "Attending", vol: "Volunteering", con: "Consistency", misc: "Miscellaneous" };
+const BASE_BANDS = ["ACADEMIC & RESEARCH", "COMMUNICATIONS", "CONTEST & QSL", "CREATIVES", "FUND & INTERNAL AUDIT", "LICENSING", "RADIO ENGINEERING AND DEVELOPMENT", "RECORDS", "RECRUITMENT", "TRIBUNAL"];
+
+const $ = (s, r) => (r || document).querySelector(s);
+function h(tag, attrs) {
+  const e = document.createElement(tag), kids = Array.prototype.slice.call(arguments, 2);
+  attrs = attrs || {};
+  for (const k in attrs) {
+    const v = attrs[k];
+    if (v == null || v === false || k === "value") continue;
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.slice(0, 2) === "on") e.addEventListener(k.slice(2), v);
+    else if (k === "checked") e.checked = !!v;
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  kids.flat(2).forEach(c => { if (c == null || c === false) return; e.append(c.nodeType ? c : document.createTextNode(String(c))); });
+  if (attrs.value != null) e.value = attrs.value;
+  return e;
+}
+let toastTimer;
+function toast(msg, bad) {
+  const t = $("#toast"); t.textContent = msg; t.className = bad ? "err" : ""; t.style.display = "block";
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.display = "none"; }, bad ? 6000 : 2500);
+}
+function nowMonth() { return new Date().toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "Asia/Manila" }); }
+function manila(iso) {
+  const o = {};
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date(iso)).forEach(p => { o[p.type] = p.value; });
+  return { date: o.year + "-" + o.month + "-" + o.day, time: o.hour + ":" + o.minute };
+}
+function fmtEvent(e) {
+  if (!e.event_at) return "Date to be announced";
+  const p = manila(e.event_at);
+  const d = new Date(p.date + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  return d + (e.has_time ? " · " + p.time + " (Manila)" : "");
+}
+
+let sb = null;
+const S = { tab: "members", members: [], acts: [], events: [], archive: [], sel: new Set(), q: "", filter: "all" };
+
+/* ---------------- start ---------------- */
+function start() {
+  const app = $("#app");
+  if (/PASTE_/.test(CONFIG.SUPABASE_URL + CONFIG.SUPABASE_KEY)) {
+    app.append(h("main", null, h("div", { class: "card login" }, h("h2", { text: "Almost there" }),
+      h("p", { class: "mut", text: "Open admin.html in a text editor and paste your Supabase Project URL and key near the top (the CONFIG block)." }))));
+    return;
+  }
+  sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+  sb.auth.getSession().then(r => { r.data.session ? enter() : loginScreen(); });
+}
+
+function loginScreen(msg) {
+  const app = $("#app"); app.replaceChildren();
+  const email = h("input", { type: "email", autocomplete: "username", placeholder: "you@example.com" });
+  const pass = h("input", { type: "password", autocomplete: "current-password", placeholder: "Password" });
+  const go = async () => {
+    const r = await sb.auth.signInWithPassword({ email: email.value.trim(), password: pass.value });
+    if (r.error) return toast(r.error.message, true);
+    enter();
+  };
+  pass.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+  app.append(h("main", null, h("div", { class: "card login" },
+    h("h2", { text: "Circle moderator login" }), msg ? h("p", { class: "mut", text: msg }) : null,
+    h("label", { text: "Email" }), email, h("label", { text: "Password" }), pass,
+    h("div", { class: "row", style: "margin-top:14px" }, h("button", { class: "pri grow", text: "Log in", onclick: go })))));
+}
+
+async function enter() {
+  const r = await sb.rpc("is_admin");
+  if (r.error || r.data !== true) {
+    await sb.auth.signOut();
+    return loginScreen("This account is not a moderator. Ask the admin to add your email, then log in again.");
+  }
+  shell(); await refresh();
+}
+
+function shell() {
+  const app = $("#app"); app.replaceChildren();
+  app.append(
+    h("header", null, h("h1", { text: "Circle moderator" }),
+      h("div", { class: "row" }, h("a", { href: "index.html", class: "mut", target: "_blank", rel: "noopener", text: "View site" }),
+        h("button", { class: "sm", text: "Log out", onclick: async () => { await sb.auth.signOut(); loginScreen(); } }))),
+    h("main", null, h("div", { class: "tabs", id: "tabs" }), h("div", { id: "view" })));
+  drawTabs();
+}
+function drawTabs() {
+  const t = $("#tabs"); t.replaceChildren();
+  [["members", "Members & points"], ["events", "Events"], ["reset", "Monthly reset"], ["archive", "Archive"]].forEach(([k, l]) =>
+    t.append(h("button", { class: S.tab === k ? "on" : "", text: l, onclick: () => { S.tab = k; drawTabs(); drawView(); } })));
+}
+function drawView() {
+  ({ members: viewMembers, events: viewEvents, reset: viewReset, archive: viewArchive })[S.tab]();
+}
+
+/* ---------------- data ---------------- */
+async function fetchAll(table, cols, order) {
+  let out = [], from = 0;
+  for (;;) {
+    const r = await sb.from(table).select(cols).order(order).order("id").range(from, from + 999);
+    if (r.error) throw r.error;
+    out = out.concat(r.data);
+    if (r.data.length < 1000) return out;
+    from += 1000;
+  }
+}
+async function refresh() {
+  try {
+    const [m, a, e, ar] = await Promise.all([
+      fetchAll("members", "id,name,neophyte,band", "name"),
+      fetchAll("activity", "id,member_id,label,category,pts,note,created_at", "created_at"),
+      sb.from("events").select("*").order("sort").order("id"),
+      sb.from("archive").select("id,month,created_at,snapshot").order("created_at", { ascending: false })
+    ]);
+    if (e.error) throw e.error; if (ar.error) throw ar.error;
+    S.members = m; S.acts = a; S.events = e.data; S.archive = ar.data;
+    const ids = new Set(m.map(x => x.id)); S.sel.forEach(id => { if (!ids.has(id)) S.sel.delete(id); });
+  } catch (err) { toast("Could not load data: " + (err.message || err), true); }
+  drawView();
+  const open = document.querySelector("dialog[data-member]");
+  if (open) { const id = Number(open.dataset.member); open.close(); if (S.members.some(x => x.id === id)) openMember(id); }
+}
+async function run(promise, okMsg) {
+  const r = await promise;
+  if (r && r.error) { toast(r.error.message, true); return false; }
+  if (okMsg) toast(okMsg);
+  return true;
+}
+function totals(id) {
+  const t = { att: 0, vol: 0, con: 0, misc: 0, tot: 0, list: [] };
+  S.acts.forEach(a => { if (a.member_id === id) { t[a.category] += a.pts; t.tot += a.pts; t.list.push(a); } });
+  return t;
+}
+function allBands() {
+  const set = new Set(BASE_BANDS);
+  S.members.forEach(m => (m.band ? m.band.split(", ") : []).forEach(b => set.add(b)));
+  return Array.from(set).sort();
+}
+const bandStr = arr => arr.join(", ");
+
+/* ---------------- members tab ---------------- */
+function viewMembers() {
+  const v = $("#view"); v.replaceChildren();
+  const search = h("input", { type: "text", placeholder: "Search name or band", value: S.q });
+  search.addEventListener("input", () => { S.q = search.value; drawList(); });
+  const filters = h("div", { class: "row", id: "filters" });
+  v.append(
+    h("div", { class: "card" },
+      h("div", { class: "row" }, h("div", { class: "grow" }, search),
+        h("button", { class: "pri", text: "+ Add member", onclick: openNewMember })),
+      h("div", { style: "margin-top:10px" }, filters)),
+    h("div", { id: "bulk" }), h("div", { class: "card list", id: "list" }));
+  const FL = [["all", "All"], ["points", "With points"], ["neo", "Neophytes"], ["noband", "No band"]];
+  FL.forEach(([k, l]) => filters.append(h("button", { class: "sm " + (S.filter === k ? "on" : ""), text: l,
+    onclick: () => { S.filter = k; viewMembers(); } })));
+  drawList();
+}
+function drawBulk() {
+  const b = $("#bulk"); if (!b) return; b.replaceChildren();
+  if (!S.sel.size) return;
+  b.append(h("div", { class: "bulk row" }, h("b", { text: S.sel.size + " selected" }), h("span", { class: "grow" }),
+    h("button", { class: "pri sm", text: "Add points…", onclick: () => openBulkPoints() }),
+    h("button", { class: "sm", text: "Assign band…", onclick: () => openBulkBand() }),
+    h("button", { class: "sm", text: "Clear", onclick: () => { S.sel.clear(); drawList(); } })));
+}
+function drawList() {
+  const box = $("#list"); if (!box) return; box.replaceChildren();
+  const q = S.q.trim().toLowerCase();
+  const rows = S.members.map(m => ({ m, t: totals(m.id) })).filter(({ m, t }) => {
+    if (q && !(m.name + " " + m.band).toLowerCase().includes(q)) return false;
+    if (S.filter === "points") return t.tot !== 0;
+    if (S.filter === "neo") return m.neophyte;
+    if (S.filter === "noband") return !m.band;
+    return true;
+  });
+  if (!rows.length) box.append(h("p", { class: "mut", text: "No members match." }));
+  rows.forEach(({ m, t }) => {
+    const cb = h("input", { type: "checkbox", checked: S.sel.has(m.id), "aria-label": "Select " + m.name });
+    cb.addEventListener("change", () => { cb.checked ? S.sel.add(m.id) : S.sel.delete(m.id); drawBulk(); });
+    box.append(h("div", { class: "item" }, cb,
+      h("div", { class: "name", onclick: () => openMember(m.id) }, h("b", { text: m.name }), " ",
+        m.neophyte ? h("span", { class: "pill neo", text: "neophyte" }) : null,
+        h("div", { class: "mut", text: m.band || "No band yet" })),
+      h("div", { class: "pts", text: t.tot })));
+  });
+  drawBulk();
+}
+
+function bandChecks(current) {
+  const boxes = allBands().map(b => h("label", { class: "chk" }, h("input", { type: "checkbox", value: b, checked: current.includes(b) }), b));
+  const extra = h("input", { type: "text", placeholder: "Another band (optional)" });
+  const wrap = h("div", null, h("div", { class: "grid2" }, boxes), h("label", { text: "New band name" }), extra);
+  wrap.read = () => {
+    const picked = boxes.map(l => l.firstChild).filter(i => i.checked).map(i => i.value);
+    const x = extra.value.trim().toUpperCase(); if (x && !picked.includes(x)) picked.push(x);
+    return picked;
+  };
+  wrap.onPick = fn => boxes.forEach(l => l.firstChild.addEventListener("change", fn));
+  return wrap;
+}
+
+function dialog(attrs, ...kids) {
+  const d = h("dialog", attrs, ...kids);
+  d.addEventListener("close", () => d.remove());
+  document.body.append(d); d.showModal(); return d;
+}
+const closeBtn = d => h("button", { class: "sm", text: "Close", onclick: () => d.close() });
+
+function openMember(id) {
+  const m = S.members.find(x => x.id === id); if (!m) return;
+  const t = totals(id);
+  const name = h("input", { type: "text", value: m.name });
+  const neo = h("input", { type: "checkbox", checked: m.neophyte });
+  const bc = bandChecks(m.band ? m.band.split(", ") : []);
+  bc.onPick(() => { if (neo.checked && bc.read().length) neo.checked = false; });
+  const d = dialog({ "data-member": String(id) });
+  const acts = t.list.length
+    ? t.list.slice().reverse().map(a => {
+        const pts = h("input", { type: "number", value: a.pts, style: "width:84px" });
+        return h("div", { class: "item row", style: "border-top:1px solid var(--line);padding:8px 0" },
+          h("div", { class: "grow" }, h("b", { text: a.label }), h("div", { class: "mut", text: CATNAME[a.category] + " · " + new Date(a.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Manila" }) })),
+          pts,
+          h("button", { class: "sm", text: "Save", onclick: async () => { const n = parseInt(pts.value, 10); if (isNaN(n)) return toast("Enter a number", true); if (await run(sb.from("activity").update({ pts: n }).eq("id", a.id), "Points updated")) refresh(); } }),
+          h("button", { class: "sm bad", text: "Delete", onclick: async () => { if (confirm("Delete this entry?") && await run(sb.from("activity").delete().eq("id", a.id), "Entry deleted")) refresh(); } }));
+      })
+    : [h("p", { class: "mut", text: "No points this month." })];
+  d.append(
+    h("div", { class: "row" }, h("h2", { class: "grow", text: m.name }), closeBtn(d)),
+    h("div", { class: "row", style: "margin:6px 0 10px" },
+      ["att", "vol", "con", "misc"].map(k => h("span", { class: "pill", text: CATNAME[k] + " " + t[k] })), h("span", { class: "pill ok", text: "Total " + t.tot })),
+    h("h2", { text: "Points", style: "margin-top:14px" }), h("div", null, acts),
+    h("h2", { text: "Add points", style: "margin-top:16px" }), pointsForm(() => [id], () => refresh()),
+    h("h2", { text: "Band and details", style: "margin-top:20px" }),
+    h("label", { text: "Name" }), name,
+    h("label", { class: "chk" }, neo, "Neophyte (uncheck once they get their band)"),
+    h("div", { class: "mut", text: "Band(s):" }), bc,
+    h("div", { class: "row", style: "margin-top:12px" },
+      h("button", { class: "pri", text: "Save band and details", onclick: async () => {
+        const nm = name.value.trim(); if (!nm) return toast("Name can't be empty", true);
+        if (await run(sb.from("members").update({ name: nm, neophyte: neo.checked, band: bandStr(bc.read()) }).eq("id", id), "Saved")) refresh();
+      } }),
+      h("span", { class: "grow" }),
+      h("button", { class: "bad", text: "Delete member", onclick: async () => {
+        if (confirm("Delete " + m.name + " and all their points? This can't be undone.") && await run(sb.from("members").delete().eq("id", id), "Member deleted")) { d.close(); refresh(); }
+      } })));
+}
+
+function pointsForm(getIds, done) {
+  const cat = h("select", null, Object.keys(CATNAME).map(k => h("option", { value: k, text: CATNAME[k] })));
+  const act = h("select");
+  const label = h("input", { type: "text", placeholder: "What for (e.g. Net control)" });
+  const pts = h("input", { type: "number", placeholder: "Points" });
+  const forEv = h("input", { type: "text", placeholder: "Event name (optional)" });
+  const fill = () => {
+    act.replaceChildren(...RULES[cat.value].map(([n, p], i) => h("option", { value: String(i), text: n + " (" + p + ")" })), h("option", { value: "custom", text: "Custom…" }));
+    pick();
+  };
+  const pick = () => {
+    if (act.value === "custom") { label.value = ""; pts.value = ""; return; }
+    const [n, p] = RULES[cat.value][Number(act.value)]; label.value = n; pts.value = p;
+  };
+  cat.addEventListener("change", fill); act.addEventListener("change", pick); fill();
+  return h("div", null,
+    h("div", { class: "grid2" }, h("div", null, h("label", { text: "Category" }), cat), h("div", null, h("label", { text: "Activity" }), act)),
+    h("div", { class: "grid2" }, h("div", null, h("label", { text: "Label shown on the site" }), label), h("div", null, h("label", { text: "Points (half day = half; negative to correct)" }), pts)),
+    h("label", { text: "Event (optional)" }), forEv,
+    h("div", { class: "row", style: "margin-top:12px" }, h("button", { class: "pri", text: "Add points", onclick: async () => {
+      const ids = getIds(), n = parseInt(pts.value, 10), l = label.value.trim();
+      if (!ids.length) return toast("Pick at least one member", true);
+      if (!l || isNaN(n)) return toast("Add a label and a number of points", true);
+      const ev = forEv.value.trim(), full = ev ? l + " (" + ev + ")" : l;
+      if (await run(sb.from("activity").insert(ids.map(id => ({ member_id: id, label: full, category: cat.value, pts: n }))), "Added " + n + " pts to " + ids.length + " member" + (ids.length > 1 ? "s" : ""))) done();
+    } })));
+}
+function openBulkPoints() {
+  const d = dialog(null);
+  d.append(h("div", { class: "row" }, h("h2", { class: "grow", text: "Add points to " + S.sel.size + " members" }), closeBtn(d)),
+    pointsForm(() => Array.from(S.sel), () => { S.sel.clear(); d.close(); refresh(); }));
+}
+function openBulkBand() {
+  const bc = bandChecks([]);
+  const neo = h("input", { type: "checkbox", checked: true });
+  const d = dialog(null);
+  d.append(h("div", { class: "row" }, h("h2", { class: "grow", text: "Assign band to " + S.sel.size + " members" }), closeBtn(d)),
+    h("p", { class: "mut", text: "This replaces their current band." }), bc,
+    h("label", { class: "chk" }, neo, "They are no longer neophytes"),
+    h("div", { class: "row", style: "margin-top:12px" }, h("button", { class: "pri", text: "Assign", onclick: async () => {
+      const picked = bc.read(); if (!picked.length) return toast("Pick a band", true);
+      const patch = { band: bandStr(picked) }; if (neo.checked) patch.neophyte = false;
+      if (await run(sb.from("members").update(patch).in("id", Array.from(S.sel)), "Band assigned")) { S.sel.clear(); d.close(); refresh(); }
+    } })));
+}
+function openNewMember() {
+  const name = h("input", { type: "text", placeholder: "Last, First M." });
+  const neo = h("input", { type: "checkbox", checked: true });
+  const bc = bandChecks([]);
+  bc.onPick(() => { if (bc.read().length) neo.checked = false; });
+  const d = dialog(null);
+  d.append(h("div", { class: "row" }, h("h2", { class: "grow", text: "Add member" }), closeBtn(d)),
+    h("label", { text: "Name" }), name, h("label", { class: "chk" }, neo, "Neophyte"), h("div", { class: "mut", text: "Band (leave empty if none yet):" }), bc,
+    h("div", { class: "row", style: "margin-top:12px" }, h("button", { class: "pri", text: "Add", onclick: async () => {
+      const nm = name.value.trim(); if (!nm) return toast("Enter a name", true);
+      if (await run(sb.from("members").insert({ name: nm, neophyte: neo.checked, band: bandStr(bc.read()) }), "Member added")) { d.close(); refresh(); }
+    } })));
+}
+
+/* ---------------- events tab ---------------- */
+function viewEvents() {
+  const v = $("#view"); v.replaceChildren();
+  v.append(h("div", { class: "row", style: "margin-bottom:12px" }, h("button", { class: "pri", text: "+ Add event", onclick: () => openEvent() })));
+  [["next", "Next events"], ["ongoing", "Ongoing"], ["done", "Done"]].forEach(([st, title]) => {
+    const list = S.events.filter(e => e.status === st);
+    v.append(h("h2", { text: title + " (" + list.length + ")" }));
+    if (!list.length) v.append(h("p", { class: "mut", text: "None." }));
+    list.forEach(e => v.append(h("div", { class: "card" },
+      h("div", { class: "row" }, h("b", { class: "grow", text: e.title }), h("span", { class: "pill", text: e.kind }), e.featured ? h("span", { class: "pill", text: "featured" }) : null,
+        st === "ongoing" ? h("span", { class: "pill live", text: "ongoing" }) : null),
+      h("div", { class: "mut", text: st === "next" ? fmtEvent(e) : (e.description || "") }),
+      st === "next" && e.note ? h("div", { class: "mut", text: e.note }) : null,
+      h("div", { class: "row", style: "margin-top:10px" },
+        h("button", { class: "sm", text: "Edit", onclick: () => openEvent(e) }),
+        st !== "done" ? h("button", { class: "sm", text: "Mark done", onclick: () => setStatus(e, "done") }) : null,
+        st !== "ongoing" ? h("button", { class: "sm", text: "Mark ongoing", onclick: () => setStatus(e, "ongoing") }) : null,
+        st !== "next" ? h("button", { class: "sm", text: "Make next event", onclick: () => setStatus(e, "next") }) : null,
+        h("span", { class: "grow" }),
+        h("button", { class: "sm bad", text: "Delete", onclick: async () => { if (confirm("Delete " + e.title + "?") && await run(sb.from("events").delete().eq("id", e.id), "Event deleted")) refresh(); } })))));
+  });
+}
+async function setStatus(e, st) { if (await run(sb.from("events").update({ status: st }).eq("id", e.id), "Moved to " + st)) refresh(); }
+function openEvent(e) {
+  const isNew = !e; e = e || { title: "", kind: "Event", description: "", event_at: null, has_time: false, note: "", status: "next", featured: false, sort: (S.events.reduce((a, x) => Math.max(a, x.sort), 0) + 1) };
+  const p = e.event_at ? manila(e.event_at) : { date: "", time: "" };
+  const f = {
+    title: h("input", { type: "text", value: e.title }), kind: h("input", { type: "text", value: e.kind }),
+    description: h("textarea", { value: e.description }), note: h("textarea", { value: e.note }),
+    date: h("input", { type: "date", value: p.date }), time: h("input", { type: "time", value: e.has_time ? p.time : "" }),
+    status: h("select", { value: e.status }, [["next", "Next event (shows the countdown)"], ["ongoing", "Ongoing"], ["done", "Done"]].map(([k, l]) => h("option", { value: k, text: l }))),
+    featured: h("input", { type: "checkbox", checked: e.featured }), sort: h("input", { type: "number", value: e.sort })
+  };
+  f.status.value = e.status;
+  const d = dialog(null);
+  d.append(h("div", { class: "row" }, h("h2", { class: "grow", text: isNew ? "Add event" : "Edit event" }), closeBtn(d)),
+    h("label", { text: "Title" }), f.title,
+    h("div", { class: "grid2" }, h("div", null, h("label", { text: "Status" }), f.status), h("div", null, h("label", { text: "Label (e.g. Radio duty)" }), f.kind)),
+    h("label", { text: "Description (shown on done / ongoing cards)" }), f.description,
+    h("div", { class: "grid2" }, h("div", null, h("label", { text: "Date (Manila time)" }), f.date), h("div", null, h("label", { text: "Time (optional)" }), f.time)),
+    h("label", { text: "Note (shown under the countdown)" }), f.note,
+    h("div", { class: "grid2" }, h("label", { class: "chk" }, f.featured, "Featured (big card)"), h("div", null, h("label", { text: "Order (smaller shows first)" }), f.sort)),
+    h("div", { class: "row", style: "margin-top:12px" }, h("button", { class: "pri", text: "Save", onclick: async () => {
+      const title = f.title.value.trim(); if (!title) return toast("Enter a title", true);
+      const row = {
+        title, kind: f.kind.value.trim() || "Event", description: f.description.value.trim(), note: f.note.value.trim(), status: f.status.value,
+        event_at: f.date.value ? f.date.value + "T" + (f.time.value || "00:00") + ":00+08:00" : null, has_time: !!(f.date.value && f.time.value),
+        featured: f.featured.checked, sort: parseInt(f.sort.value, 10) || 0
+      };
+      const q = isNew ? sb.from("events").insert(row) : sb.from("events").update(row).eq("id", e.id);
+      if (await run(q, "Event saved")) { d.close(); refresh(); }
+    } })));
+}
+
+/* ---------------- monthly reset ---------------- */
+function viewReset() {
+  const v = $("#view"); v.replaceChildren();
+  const scoring = S.members.filter(m => totals(m.id).tot !== 0).length, total = S.members.reduce((s, m) => s + totals(m.id).tot, 0);
+  const month = h("input", { type: "text", value: nowMonth() });
+  const word = h("input", { type: "text", placeholder: "Type RESET" });
+  const btn = h("button", { class: "bad", text: "Save to archive and reset points", disabled: true });
+  word.addEventListener("input", () => { btn.disabled = word.value.trim() !== "RESET"; });
+  btn.addEventListener("click", async () => {
+    if (!month.value.trim()) return toast("Enter the month name", true);
+    btn.disabled = true;
+    if (await run(sb.rpc("reset_month", { p_month: month.value.trim() }), "Points reset. Saved to the archive.")) { S.sel.clear(); S.tab = "archive"; drawTabs(); refresh(); } else btn.disabled = false;
+  });
+  v.append(h("div", { class: "card" }, h("h2", { text: "Start a new month" }),
+    h("p", { class: "mut", text: scoring + " members have points right now (" + total + " pts in total)." }),
+    h("p", { class: "mut", text: "This saves a copy of every member's points to the Archive, then clears all points for the new month. Members, bands, neophyte status and events stay as they are." }),
+    h("label", { text: "Name of the month you are closing" }), month,
+    h("label", { text: "To confirm, type RESET" }), word, h("div", { style: "margin-top:12px" }, btn)));
+}
+
+/* ---------------- archive ---------------- */
+function viewArchive() {
+  const v = $("#view"); v.replaceChildren();
+  if (!S.archive.length) return v.append(h("p", { class: "mut", text: "Nothing archived yet. Months you reset will appear here." }));
+  S.archive.forEach(a => {
+    const rows = a.snapshot || [], total = rows.reduce((s, r) => s + r.total, 0);
+    v.append(h("details", { class: "card" }, h("summary", { text: a.month + " · " + rows.length + " members · " + total + " pts" }),
+      h("div", { class: "row", style: "margin:10px 0" },
+        h("button", { class: "sm", text: "Download CSV", onclick: () => downloadCsv(a) }), h("span", { class: "grow" }),
+        h("button", { class: "sm bad", text: "Delete this archive", onclick: async () => { if (confirm("Delete the " + a.month + " archive?") && await run(sb.from("archive").delete().eq("id", a.id), "Archive deleted")) refresh(); } })),
+      h("div", { style: "overflow-x:auto" }, h("table", null,
+        h("thead", null, h("tr", null, h("th", { text: "Member" }), h("th", { text: "Band" }), ["Att", "Vol", "Con", "Misc", "Total"].map(x => h("th", { class: "n", text: x })))),
+        h("tbody", null, rows.map(r => h("tr", null, h("td", { text: r.name }), h("td", { text: r.band || "" }), [r.att, r.vol, r.con, r.misc, r.total].map(x => h("td", { class: "n", text: x })))))))));
+  });
+}
+function downloadCsv(a) {
+  const esc = x => '"' + String(x == null ? "" : x).replace(/"/g, '""') + '"';
+  const lines = [["Member", "Band", "Attending", "Volunteering", "Consistency", "Misc", "Total"].map(esc).join(",")]
+    .concat((a.snapshot || []).map(r => [r.name, r.band, r.att, r.vol, r.con, r.misc, r.total].map(esc).join(",")));
+  const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+  const l = h("a", { href: url, download: "leaderboard-" + a.month.replace(/\s+/g, "-") + ".csv" });
+  document.body.append(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+start();
+</script>
+</body>
+</html>
