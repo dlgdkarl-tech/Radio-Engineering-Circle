@@ -1375,46 +1375,117 @@ async function renderTop5Card() {
   return cardOut(c);
 }
 function emaPath(x, px, py, w, hh, roof) { x.beginPath(); x.moveTo(px, py + roof); x.lineTo(px + w / 2, py); x.lineTo(px + w, py + roof); x.lineTo(px + w, py + hh); x.lineTo(px, py + hh); x.closePath(); }
+function wrapAll(x, text, maxW) {
+  const lines = []; let cur = "";
+  String(text).split(" ").forEach((w) => { const t = cur ? cur + " " + w : w; if (x.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; });
+  if (cur) lines.push(cur);
+  return lines;
+}
+// Lays out the text of one plaque (no truncation anywhere). Returns draw ops relative to the plaque's top-left, plus the bottom edge.
+function awardBody(x, a, w, sans) {
+  const ops = [], PAD = 32, inner = w - PAD * 2, wide = w > 600, won = a.who.length > 0;
+  let top = 190, bottom = top;
+  const add = (text, font, px, py, dim) => ops.push({ text, font, px, py, dim });
+  const fitLines = (text, wt, fs0, fsMin, maxW, lhK) => {
+    let fs = fs0; x.font = wt + " " + fs + "px " + MINC;
+    while (fs > fsMin && x.measureText(text).width > maxW) { fs -= 1; x.font = wt + " " + fs + "px " + MINC; }
+    return { fs, lines: x.measureText(text).width > maxW ? wrapAll(x, text, maxW) : [text], lh: Math.round(fs * lhK) };
+  };
+  const note = (txt, y) => {
+    x.font = "500 20px " + sans; const ls = wrapAll(x, txt, inner);
+    ls.forEach((l, k) => add(l, "500 20px " + sans, PAD, y + 20 + k * 27, true));
+    return y + ls.length * 27 + 4;
+  };
+  if (a.ranked && a.ranked.length) {
+    const rk = a.ranked, two = wide && rk.length > 4, colW = two ? (inner - 28) / 2 : inner, per = two ? Math.ceil(rk.length / 2) : rk.length;
+    const ys = [top, top];
+    rk.forEach((r, k) => {
+      const col = two ? Math.floor(k / per) : 0, txt = "#" + r.rank + "  " + (r.n.includes(", ") ? nat(r.n) : r.n) + "  \u00B7  " + r.pts + " pts";
+      const f = fitLines(txt, "700", 24, 19, colW, 1.28);
+      f.lines.forEach((l, j) => add(l, "700 " + f.fs + "px " + MINC, PAD + col * (colW + 28) + (j ? 28 : 0), ys[col] + f.fs + j * f.lh, false));
+      ys[col] += f.lines.length * f.lh + 6;
+    });
+    bottom = Math.max(ys[0], ys[1]) + 6;
+    bottom = note(a.note, bottom);
+  } else if (won) {
+    const names = a.who.map((q) => q.includes(", ") ? nat(q) : q), two = wide && names.length > 4, colW = two ? (inner - 28) / 2 : inner, per = two ? Math.ceil(names.length / 2) : names.length;
+    const ys = [top, top];
+    names.forEach((n, k) => {
+      const col = two ? Math.floor(k / per) : 0, f = fitLines(n, "700", 30, 21, colW, 1.25);
+      f.lines.forEach((l, j) => add(l, "700 " + f.fs + "px " + MINC, PAD + col * (colW + 28) + (j ? 20 : 0), ys[col] + f.fs + j * f.lh, false));
+      ys[col] += f.lines.length * f.lh + 8;
+    });
+    bottom = Math.max(ys[0], ys[1]) + 4;
+    bottom = note((a.pts ? a.pts + " pts \u00B7 " : "") + a.note, bottom);
+  } else {
+    add("Still open", "700 32px " + MINC, PAD, top + 32, false);
+    bottom = note(a.note, top + 46);
+  }
+  return { ops, bottom };
+}
+function drawPlaque(x, c, px, py, sans) {
+  const { a, i, w, h, ops } = c, won = a.who.length > 0, ROOF = 50, ink = won ? JP.INK : JP.PAPER;
+  x.save(); x.lineJoin = "round";
+  if (won) { x.shadowColor = "rgba(0,0,0,.55)"; x.shadowBlur = 20; x.shadowOffsetY = 8; emaPath(x, px, py, w, h, ROOF); const g = x.createLinearGradient(px, py, px + w * 0.4, py + h); g.addColorStop(0, "#e6cb9b"); g.addColorStop(0.55, "#d0a870"); g.addColorStop(1, "#c19559"); x.fillStyle = g; x.fill(); x.shadowColor = "transparent"; x.strokeStyle = "rgba(90,55,25,.6)"; x.lineWidth = 6; x.stroke(); }
+  else { emaPath(x, px, py, w, h, ROOF); x.fillStyle = "rgba(239,230,209,.07)"; x.fill(); x.setLineDash([12, 9]); x.strokeStyle = "rgba(239,230,209,.55)"; x.lineWidth = 3; x.stroke(); x.setLineDash([]); }
+  x.restore();
+  x.fillStyle = won ? "#3a2210" : "rgba(239,230,209,.55)"; x.beginPath(); x.arc(px + w / 2, py + 24, 8, 0, 6.283); x.fill();
+  const kj = ["\u53C2", "\u5949", "\u697D", "\u65B0", "\u4FE1", "\u6280"][i % 6];
+  x.font = "104px " + BRSH; if (won) { x.fillStyle = JP.INK; x.fillText(kj, px + 30, py + 158); } else { x.strokeStyle = "rgba(239,230,209,.55)"; x.lineWidth = 2; x.strokeText(kj, px + 30, py + 158); }
+  x.fillStyle = ink; x.font = "700 24px " + MINC; wrapLines(x, a.t.toUpperCase(), w > 600 ? 420 : 190, 2).forEach((l, k) => x.fillText(l, px + 150, py + 106 + k * 32));
+  if (won) hanko(x, px + w - 62, py + 112, 34, "\u53D7\u8CDE", 22);
+  ops.forEach((o) => { x.font = o.font; x.fillStyle = o.dim ? (won ? "rgba(26,22,18,.85)" : "rgba(239,230,209,.88)") : ink; x.fillText(o.text, px + o.px, py + o.py); });
+}
+// One card if every plaque fits legibly; otherwise the awards are spread over two (or more) cards so no name is ever cut off.
 async function renderAwardsCard() {
-  const { c, x, W, H, sans } = await cardCanvas(); await jpFonts("特別賞受賞参奉楽新信技");
-  x.fillStyle = "#13233a"; x.fillRect(0, 0, W, H);
-  seigahaC(x, 0, 0, W, 110, 28, "rgba(239,230,209,.35)", "#1c3556", "#18304f");
-  x.fillStyle = "rgba(10,18,32,.82)"; x.fillRect(0, 70, W, 200);
-  x.fillStyle = "#f6ead2"; x.font = "700 120px " + MINC; x.fillText("\u7279\u5225\u8CDE", 70, 200);
-  x.font = "600 30px " + sans; x.fillText("SPECIAL AWARDS  \u00B7  PUP RADIO ENGINEERING CIRCLE", 74, 248);
-  hanko(x, W - 150, 170, 62, "\u8CDE", 70);
-  const AW = 460, AH = 296, ROOF = 50;
-  LB.awards.forEach((a, i) => {
-    const px = 70 + (i % 2) * 480, py = 306 + Math.floor(i / 2) * 314, won = a.who.length > 0, who = a.who.map((q) => q.includes(", ") ? nat(q) : q).join(" \u00B7 ");
-    x.save(); x.lineJoin = "round";
-    if (won) { x.shadowColor = "rgba(0,0,0,.55)"; x.shadowBlur = 20; x.shadowOffsetY = 8; emaPath(x, px, py, AW, AH, ROOF); const g = x.createLinearGradient(px, py, px + AW * 0.4, py + AH); g.addColorStop(0, "#e6cb9b"); g.addColorStop(0.55, "#d0a870"); g.addColorStop(1, "#c19559"); x.fillStyle = g; x.fill(); x.shadowColor = "transparent"; x.strokeStyle = "rgba(90,55,25,.6)"; x.lineWidth = 6; x.stroke(); }
-    else { emaPath(x, px, py, AW, AH, ROOF); x.fillStyle = "rgba(239,230,209,.07)"; x.fill(); x.setLineDash([12, 9]); x.strokeStyle = "rgba(239,230,209,.55)"; x.lineWidth = 3; x.stroke(); x.setLineDash([]); }
-    x.restore();
-    x.fillStyle = won ? "#3a2210" : "rgba(239,230,209,.55)"; x.beginPath(); x.arc(px + AW / 2, py + 24, 8, 0, 6.283); x.fill();
-    const ink = won ? JP.INK : JP.PAPER, kj = ["参", "奉", "楽", "新", "信", "技"][i % 6];
-    x.font = "104px " + BRSH; if (won) { x.fillStyle = JP.INK; x.fillText(kj, px + 30, py + 158); } else { x.strokeStyle = "rgba(239,230,209,.55)"; x.lineWidth = 2; x.strokeText(kj, px + 30, py + 158); }
-    x.fillStyle = ink; x.font = "700 24px " + MINC; wrapLines(x, a.t.toUpperCase(), 190, 2).forEach((l, k) => x.fillText(l, px + 150, py + 106 + k * 32));
-    if (won) hanko(x, px + AW - 62, py + 112, 34, "\u53D7\u8CDE", 22);
-    if (a.ranked && a.ranked.length) {
-      const n = a.ranked.length, lh = n > 3 ? 23 : 27, y0 = py + 186;
-      x.fillStyle = ink;
-      a.ranked.forEach((r, k) => {
-        const txt = "#" + r.rank + "  " + (r.n.includes(", ") ? nat(r.n) : r.n) + "  \u00B7  " + r.pts + " pts";
-        let fs = 23; x.font = "700 " + fs + "px " + MINC; while (fs > 14 && x.measureText(txt).width > 396) { fs--; x.font = "700 " + fs + "px " + MINC; }
-        x.fillText(txt, px + 32, y0 + k * lh);
-      });
-      const ny = y0 + (n - 1) * lh + 26;
-      if (ny < py + AH - 12) { x.font = "500 19px " + sans; x.fillText(a.note, px + 32, ny); }
-    } else {
-    x.font = "700 32px " + MINC; x.fillStyle = ink; const wl = wrapLines(x, who || "Still open", 396, 2); wl.forEach((l, k) => x.fillText(l, px + 32, py + 204 + k * 36));
-    x.font = "500 19px " + sans; const ny = py + 204 + (wl.length - 1) * 36 + 30, note = (a.pts ? a.pts + " pts. " : "") + a.note;
-    wrapLines(x, note, 396, wl.length > 1 ? 1 : 2).forEach((l, k) => x.fillText(l, px + 32, ny + k * 24));
+  const first = await cardCanvas(); await jpFonts("\u7279\u5225\u8CDE\u53D7\u8CDE\u53C2\u5949\u697D\u65B0\u4FE1\u6280");
+  const sans = first.sans, mx = first.x, AW = 460, FW = 940, TOP = 306, BOT = 1244, AVAIL = BOT - TOP, GAP = 18;
+  const mk = (a, i, w) => { const b = awardBody(mx, a, w, sans); return { a, i, w, ops: b.ops, h: Math.max(284, Math.ceil(b.bottom + 26)) }; };
+  const rowOf = (cells) => ({ cells, h: Math.max.apply(null, cells.map((q) => q.h)) });
+  const total = (rows) => rows.reduce((s, r) => s + r.h, 0) + GAP * Math.max(0, rows.length - 1);
+  const half = LB.awards.map((a, i) => mk(a, i, AW));
+  let rows = []; for (let i = 0; i < half.length; i += 2) rows.push(rowOf(half.slice(i, i + 2)));
+  let pages;
+  if (total(rows) <= AVAIL) pages = [rows];
+  else {
+    // Too much for one card: promote very tall plaques to full width, then split the awards, in their original order, into two cards of similar height.
+    const cells = half.map((q) => (q.h > 520 ? mk(q.a, q.i, FW) : q));
+    const rowsFor = (list) => { const sm = list.filter((q) => q.w === AW), r = []; for (let i = 0; i < sm.length; i += 2) r.push(rowOf(sm.slice(i, i + 2))); list.filter((q) => q.w !== AW).forEach((q) => r.push(rowOf([q]))); return r; };
+    let best = null;
+    for (let k = 1; k < cells.length; k++) {
+      const r1 = rowsFor(cells.slice(0, k)), r2 = rowsFor(cells.slice(k)), h1 = total(r1), h2 = total(r2);
+      if (h1 > AVAIL || h2 > AVAIL) continue;
+      const cost = Math.max(h1, h2) * 1000 + Math.abs(h1 - h2);
+      if (!best || cost < best.cost) best = { cost, pages: [r1, r2] };
     }
-  });
-  x.fillStyle = "rgba(10,18,32,.9)"; x.fillRect(0, 1268, W, 82);
-  x.fillStyle = JP.VERM; x.fillRect(0, 1262, W, 6);
-  x.fillStyle = "#f6ead2"; x.font = "700 48px " + MINC; x.textAlign = "center"; x.fillText("73 at MABUHAY!!", 540, 1326); x.textAlign = "left";
-  return cardOut(c);
+    if (best) pages = best.pages;
+    else { const all = rowsFor(cells); pages = [[]]; all.forEach((r) => { let cur = pages[pages.length - 1]; if (cur.length && total(cur.concat([r])) > AVAIL) { cur = []; pages.push(cur); } cur.push(r); }); }
+  }
+  const out = [];
+  for (let p = 0; p < pages.length; p++) {
+    const cv = p === 0 ? first : await cardCanvas(), { c, x, W, H } = cv, pg = pages[p];
+    x.fillStyle = "#13233a"; x.fillRect(0, 0, W, H);
+    seigahaC(x, 0, 0, W, 110, 28, "rgba(239,230,209,.35)", "#1c3556", "#18304f");
+    x.fillStyle = "rgba(10,18,32,.82)"; x.fillRect(0, 70, W, 200);
+    x.fillStyle = "#f6ead2"; x.font = "700 120px " + MINC; x.fillText("\u7279\u5225\u8CDE", 70, 200);
+    x.font = "600 30px " + sans; x.fillText("SPECIAL AWARDS  \u00B7  PUP RADIO ENGINEERING CIRCLE", 74, 248);
+    hanko(x, W - 150, 160, 62, "\u8CDE", 70);
+    const extra = AVAIL - total(pg), eg = pg.length > 1 ? Math.min(34, extra / (pg.length - 1)) : 0, blockH = total(pg) + eg * (pg.length - 1);
+    let y = TOP + Math.max(0, (AVAIL - blockH) / 2);
+    pg.forEach((r) => {
+      const n = r.cells.length, widths = r.cells.reduce((s, q) => s + q.w, 0) + 20 * (n - 1);
+      let px = (W - widths) / 2;
+      r.cells.forEach((q) => { q.h = r.h; drawPlaque(x, q, px, y, sans); px += q.w + 20; });
+      y += r.h + GAP + eg;
+    });
+    x.fillStyle = "rgba(10,18,32,.9)"; x.fillRect(0, 1268, W, 82);
+    x.fillStyle = JP.VERM; x.fillRect(0, 1262, W, 6);
+    x.fillStyle = "#f6ead2"; x.font = "700 48px " + MINC; x.textAlign = "center"; x.fillText("73 at MABUHAY!!", 540, 1326);
+    if (pages.length > 1) { x.font = "700 30px " + sans; x.textAlign = "right"; x.fillText((p + 1) + " / " + pages.length, W - 60, 1322); }
+    x.textAlign = "left";
+    out.push(await cardOut(c));
+  }
+  return out;
 }
 
 const SHARE_CFG = {
@@ -1423,7 +1494,7 @@ const SHARE_CFG = {
 };
 function ShareModal({ onClose, kind }) {
   const cfg = SHARE_CFG[kind] || SHARE_CFG.top5;
-  const ref = useRef(null), [img, setImg] = useState(null), [msg, setMsg] = useState("");
+  const ref = useRef(null), [imgs, setImgs] = useState(null), [msg, setMsg] = useState("");
   useEffect(() => {
     const prev = document.activeElement;
     const k = (e) => {
@@ -1436,20 +1507,21 @@ function ShareModal({ onClose, kind }) {
   }, []);
   useEffect(() => {
     let dead = false;
-    cfg.render().then((r) => { if (!dead && r) setImg(r); }).catch(() => {});
+    cfg.render().then((r) => { const arr = (Array.isArray(r) ? r : [r]).filter(Boolean); if (!dead && arr.length) setImgs(arr); }).catch(() => {});
     return () => { dead = true; };
   }, []);
-  const file = img ? new File([img.blob], cfg.file, { type: "image/png" }) : null;
-  const canShare = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
-  const doShare = async () => { try { await navigator.share({ files: [file], title: cfg.title, text: cfg.text }); } catch (e) {} };
-  const doSave = () => { const a = document.createElement("a"); a.href = img.url; a.download = cfg.file; document.body.appendChild(a); a.click(); a.remove(); setMsg("If nothing downloaded, press and hold the image to save it."); };
+  const many = !!(imgs && imgs.length > 1), files = imgs ? imgs.map((q, k) => new File([q.blob], many ? cfg.file.replace(".png", "-" + (k + 1) + ".png") : cfg.file, { type: "image/png" })) : null;
+  const canShare = !!(files && navigator.canShare && navigator.canShare({ files }));
+  const doShare = async () => { try { await navigator.share({ files, title: cfg.title, text: cfg.text }); } catch (e) {} };
+  const doSave = (k) => { const a = document.createElement("a"); a.href = imgs[k].url; a.download = files[k].name; document.body.appendChild(a); a.click(); a.remove(); setMsg("If nothing downloaded, press and hold the image to save it."); };
   const b = "inline-flex min-h-[44px] items-center justify-center rounded-full px-5 text-sm font-medium font-body disabled:opacity-50 ";
   return h("div", { className: "fixed inset-0 z-[60] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-6", onClick: (e) => { if (e.target === e.currentTarget) onClose(); } },
     h("div", { ref, role: "dialog", "aria-modal": "true", "aria-labelledby": "sh", className: "max-h-[92vh] w-full overflow-auto rounded-t-[1.25rem] border border-white/20 bg-black/90 p-6 sm:max-w-md sm:rounded-[1.25rem]" },
       h("div", { className: "flex items-start justify-between gap-4" }, h("h3", { id: "sh", className: H3 }, cfg.heading),
         h("button", { type: "button", onClick: onClose, "aria-label": "Close", className: "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/25 text-white hover:bg-white/10" }, h("svg", { className: "h-4 w-4", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", "aria-hidden": "true" }, h("path", { d: "M6 6l12 12M18 6L6 18" })))),
-      h("div", { className: "mt-4 overflow-hidden rounded-[0.75rem] bg-white/5", style: { aspectRatio: "4 / 5" } }, img ? h("img", { src: img.url, alt: cfg.alt, className: "h-full w-full object-contain" }) : h("div", { className: "flex h-full items-center justify-center text-sm text-white/85 font-body" }, "Drawing the card\u2026")),
-      h("div", { className: "mt-4 flex flex-wrap gap-3" }, canShare && h("button", { type: "button", onClick: doShare, className: b + "bg-white text-black" }, "Share"), h("button", { type: "button", onClick: doSave, disabled: !img, className: b + (canShare ? "liquid-glass text-white" : "bg-white text-black") }, "Download image")),
+      many && h("p", { className: "mt-3 text-sm text-white/90 font-body" }, "Split into " + imgs.length + " images so every name stays readable. Share all sends them together."),
+      (imgs || [null]).map((q, k) => h("div", { key: k, className: "mt-4 overflow-hidden rounded-[0.75rem] bg-white/5", style: { aspectRatio: "4 / 5" } }, q ? h("img", { src: q.url, alt: cfg.alt + (many ? " (part " + (k + 1) + " of " + imgs.length + ")" : ""), className: "h-full w-full object-contain" }) : h("div", { className: "flex h-full items-center justify-center text-sm text-white/85 font-body" }, "Drawing the card\u2026"))),
+      h("div", { className: "mt-4 flex flex-wrap gap-3" }, canShare && h("button", { type: "button", onClick: doShare, className: b + "bg-white text-black" }, many ? "Share all" : "Share"), (imgs || [null]).map((q, k) => h("button", { key: k, type: "button", onClick: () => doSave(k), disabled: !q, className: b + (canShare ? "liquid-glass text-white" : "bg-white text-black") }, many ? "Download " + (k + 1) : "Download image"))),
       msg && h("p", { className: "mt-3 text-sm text-white/90 font-body", "aria-live": "polite" }, msg)));
 }
 const TOP_N = 10;
