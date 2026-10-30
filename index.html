@@ -269,6 +269,18 @@
 <a class="skip-link" href="#top">Skip to content</a>
 <div id="root"></div>
 
+<style id="mobile-smooth">
+/* Smoothness fixes for phones: same look, far less GPU work */
+@media (max-width: 900px), (pointer: coarse) {
+  /* blurring the live canvas behind ~50 cards every frame is the main cause of lag; these cards are already dark/opaque */
+  .jp-shoji, .liquid-glass, .liquid-glass-strong, .liquid-glass::before, .liquid-glass-strong::before {
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  }
+  .jp-shoji { background: linear-gradient(180deg, rgba(24,17,12,.82), rgba(10,8,6,.88)); }
+  .au-blob { filter: blur(40px); }
+  .scene-grid { animation: none; }
+}
+</style>
 <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/framer-motion@11.11.17/dist/framer-motion.js" integrity="sha384-kI4i6ajXR7cfM3g1ER7z1sfNye6vd7+R7fglhgO9LF9mZiM523VKhsSp3KpS5EhX" crossorigin="anonymous"></script>
@@ -383,6 +395,7 @@ function Sky() {
     const stars = Array.from({ length: 140 }, () => ({ x: rnd(), y: Math.pow(rnd(), 1.5) * 0.62, r: 0.4 + rnd() * 1.1, ph: rnd() * 6.28 }));
     const gr = document.createElement("canvas"); gr.width = gr.height = 160; const gx = gr.getContext("2d"), im = gx.createImageData(160, 160);
     for (let k = 0; k < im.data.length; k += 4) { const v = Math.random() * 255; im.data[k] = im.data[k + 1] = im.data[k + 2] = v; im.data[k + 3] = 255; } gx.putImageData(im, 0, 0);
+    const lite = window.matchMedia("(pointer: coarse), (max-width: 900px)").matches; let lastDraw = 0;
     const size = () => { w = c.width = window.innerWidth; hh = c.height = window.innerHeight; };
     const onScroll = () => { const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight); tp = window.scrollY / max; };
     const draw = (ms) => {
@@ -446,10 +459,10 @@ function Sky() {
       });
       x.fillStyle = "rgba(0,0,0,0.30)"; x.fillRect(0, 0, w, hh);
       const vg = x.createRadialGradient(w / 2, hh / 2, Math.min(w, hh) * 0.35, w / 2, hh / 2, Math.max(w, hh) * 0.8); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,0.55)"); x.fillStyle = vg; x.fillRect(0, 0, w, hh);
-      x.save(); x.globalAlpha = 0.05; x.globalCompositeOperation = "overlay"; const ox = Math.random() * 160, oy = Math.random() * 160;
-      for (let tx = -ox; tx < w; tx += 160) for (let ty = -oy; ty < hh; ty += 160) x.drawImage(gr, tx, ty); x.restore();
+      if (!lite) { x.save(); x.globalAlpha = 0.05; x.globalCompositeOperation = "overlay"; const ox = Math.random() * 160, oy = Math.random() * 160;
+      for (let tx = -ox; tx < w; tx += 160) for (let ty = -oy; ty < hh; ty += 160) x.drawImage(gr, tx, ty); x.restore(); }
     };
-    const loop = (ms) => { draw(ms); raf = requestAnimationFrame(loop); };
+    const loop = (ms) => { raf = requestAnimationFrame(loop); if (document.hidden) return; if (lite && ms - lastDraw < 33) return; lastDraw = ms; draw(ms); };
     size(); onScroll(); p = tp;
     if (reduceMotion) draw(3000); else raf = requestAnimationFrame(loop);
     const rs = () => { size(); onScroll(); if (reduceMotion) draw(3000); };
